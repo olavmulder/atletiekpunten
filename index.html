@@ -8,55 +8,123 @@
 <body class="bg-light">
 
 <div class="container py-4">
-  <h2 class="mb-4">Decathlon Results & Points Calculator</h2>
+  <h2 class="mb-4">U14 & U16</h2>
 
   <!-- TRACK EVENTS -->
-  <h4>Track Events</h4>
+  <h4>Korte Sprint</h4>
   <div class="row g-3">
     <div class="col-md-3">
+      <label>60 m (sec)</label>
+      <input type="text" id="60m" placeholder="ss.hh (e.g. 8.01)" class="form-control">
+    </div>
+    
+    <div class="col-md-3">
+      <label>80 m (sec)</label>
+      <input type="text" id="80m" placeholder="ss.hh (e.g. 9.01)" class="form-control">
+    </div>
+    <div class="col-md-3">
       <label>100 m (sec)</label>
-      <input type="number" step="0.01" id="m100" class="form-control">
+      <input type="text" id="100m" placeholder="ss.hh (e.g. 14.01)" class="form-control">
+    </div>
+
+    <div class="col-md-3">
+      <label>150m (sec)</label>
+      <input type="text" id="150m" placeholder="ss.hh (e.g. 21.01)" class="form-control">
     </div>
     <div class="col-md-3">
-      <label>400 m (sec)</label>
-      <input type="number" step="0.01" id="m400" class="form-control">
-    </div>
-    <div class="col-md-3">
-      <label>110 m Hurdles (sec)</label>
-      <input type="number" step="0.01" id="h110" class="form-control">
-    </div>
-    <div class="col-md-3">
-      <label>1500 m (sec)</label>
-      <input type="number" step="0.1" id="m1500" class="form-control">
+      <label>300m (sec)</label>
+      <input type="text" id="m1500" placeholder="mm:ss.hh (e.g. 1:01.01)" class="form-control">
     </div>
   </div>
 
-  <!-- FIELD EVENTS -->
-  <h4 class="mt-4">Field Events</h4>
+  <h4>Korte Horde</h4>
   <div class="row g-3">
     <div class="col-md-3">
-      <label>Long Jump (m)</label>
-      <input type="number" step="0.01" id="lj" class="form-control">
+      <label>60mH (sec)</label>
+      <input type="text" id="60mh" placeholder="ss.hh (e.g. 8.01)" class="form-control">
+    </div>
+    
+    <div class="col-md-3">
+      <label>80mH (sec)</label>
+      <input type="text" id="80mH" placeholder="ss.hh (e.g. 9.01)" class="form-control">
+    </div>
+
+    <div class="col-md-3">
+      <label>100mH (sec)</label>
+      <input type="text" id="100mH" placeholder="ss.hh (e.g. 15.01)" class="form-control">
     </div>
     <div class="col-md-3">
-      <label>Shot Put (m)</label>
-      <input type="number" step="0.01" id="sp" class="form-control">
+      <label>300mH (sec)</label>
+      <input type="text" id="300mH" placeholder="ss.hh (e.g. 45.01)" class="form-control">
+    </div>
+  </div>
+    
+  <h4>MiLa</h4>
+  <div class="row g-3">
+    <div class="col-md-3">
+      <label>600m</label>
+      <input type="text" id="600m" placeholder="m:ss.hh (e.g. 1:30.01)" class="form-control">
     </div>
     <div class="col-md-3">
-      <label>High Jump (m)</label>
-      <input type="number" step="0.01" id="hj" class="form-control">
+      <label>1000m </label>
+      <input type="text" id="1000m" placeholder="m:ss.hh (e.g. 3:30.23)" class="form-control">
+    </div>
+    
+    <div class="col-md-3">
+      <label>1500m </label>
+      <input type="text" id="1500m" placeholder="m:ss.hh (e.g. 5:30.23)" class="form-control">
+    </div>
+  </div>
+
+  
+  <h4>Estafette</h4>
+  <div class="row g-3">
+    <div class="col-md-3">
+      <label>4x60m (sec)</label>
+      <input type="text" id="4x60m" placeholder="ss.hh (e.g. 33.01)" class="form-control">
+    </div>
+    
+    <div class="col-md-3">
+      <label>4x80 m (sec)</label>
+      <input type="text" id="4x80m" placeholder="ss.hh (e.g. 41.01)" class="form-control">
+    </div>
+
+    <div class="col-md-3">
+      <label>4x100m (sec)</label>
+      <input type="text" id="4x100m" placeholder="ss.hh (e.g. 50.01)" class="form-control">
+    </div>
+  </div>
+
+
+
+
+  <!-- FIELD EVENTS -->
+  <h4 class="mt-4">Veldonderdelen</h4>
+  <div class="row g-3">
+
+    <div class="col-md-3">
+      <label>Hoogspringen</label>
+      <input type="text" id="hoog" placeholder="m.cm (e.g. 1.45)" class="form-control">
     </div>
     <div class="col-md-3">
-      <label>Discus (m)</label>
-      <input type="number" step="0.01" id="dt" class="form-control">
+      <label>Polstokhoogspringen</label>
+      <input type="text" id="polstok" placeholder="m.cm (e.g. 2.45)" class="form-control">
     </div>
     <div class="col-md-3">
-      <label>Pole Vault (m)</label>
-      <input type="number" step="0.01" id="pv" class="form-control">
+      <label>Verspringen</label>
+      <input type="text" id="ver" placeholder="m.cm (e.g. 33.01)" class="form-control">
     </div>
     <div class="col-md-3">
-      <label>Javelin (m)</label>
-      <input type="number" step="0.01" id="jt" class="form-control">
+      <label>Kogelstoten</label>
+      <input type="text" id="kogel" placeholder="mm.cm (e.g. 10.45)"  class="form-control">
+    </div>
+    <div class="col-md-3">
+      <label>Discuswerpen</label>
+      <input type="text" id="discus" placeholder="mm.cm (e.g. 30.65)"  class="form-control">
+    </div>
+    <div class="col-md-3">
+      <label>Speerwerpen</label>
+      <input type="text" id="kogel" placeholder="mm.cm (e.g. 24.68)"  class="form-control">
     </div>
   </div>
 
