@@ -1,32 +1,3 @@
-function parseAllInputs(values) {
-  const parsed = {};
-
-  for (const id in values) {
-    const val = values[id];
-
-    // Decide format by input ID or custom rules
-    if (id === "300m" || id === "600m" || id === "1000m" || id === "1500m") {
-      // format mm:ss.hh → seconds float
-      parsed[id] = timeToSeconds(val);
-    } 
-    else if (id.match(/m$/i) || id.match(/mH$/i) || id.match(/x/)) {
-      // short sprint / hurdles → ss.hh → seconds float
-      parsed[id] = parseFloat(val);
-    } 
-    else if (id.match(/hoog|polstok|ver|kogel|discus|speer/i)) {
-      // field events → convert to float meters (m.cm → m)
-      parsed[id] = val.includes(".") ? parseFloat(val) : parseFloat(val.replace(",", "."));
-    } 
-    else {
-      parsed[id] = parseFloat(val);
-    }
-  }
-
-  return parsed;
-}
-
-
-
 function timeToSeconds(value) {
     // Normalize colon → dot
     const normalized = value.replace(":", ".");
