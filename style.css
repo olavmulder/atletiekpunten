@@ -37,3 +37,13 @@ font-size: 16px;
 .menu li a:hover {
 color: #00bcd4;
 }
+
+
+form {
+  max-width: 500px;  /* limit form width */
+}
+
+.points {
+  text-align: center;
+  min-width: 50px;
+}
