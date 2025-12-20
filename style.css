@@ -108,3 +108,42 @@
     flex: 0 0 50px;
   }
 }
+
+/* Hero Section */
+section.text-center {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;  /* vertical center */
+  align-items: center;
+  min-height: 60vh;         /* take at least 60% of viewport height */
+  padding: 2rem 1rem;
+}
+
+section.text-center h1 {
+  font-size: 6vw;          /* scale with viewport */
+  margin-bottom: 1rem;
+}
+
+section.text-center p {
+  font-size: 4vw;
+  max-width: 90%;
+  margin-bottom: 1.5rem;
+}
+
+/* Buttons on mobile */
+@media (max-width: 576px) {
+  section.text-center .btn-lg {
+    width: 100%;            /* full width buttons */
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+  }
+  
+  /* Cards stack closer on mobile */
+  .container .row.g-4 {
+    gap: 0.5rem;
+  }
+
+  .card {
+    margin-bottom: 0.5rem;
+  }
+}
