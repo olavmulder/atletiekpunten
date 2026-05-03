@@ -155,6 +155,23 @@
   min-width: 110px;
 }
 
+.team-name-stack {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.team-profile-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.35rem;
+}
+
+.team-profile-status {
+  min-height: 1rem;
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
 .team-points {
   margin-top: 0.35rem;
   font-size: 0.875rem;

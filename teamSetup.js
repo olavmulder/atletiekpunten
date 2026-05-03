@@ -37,6 +37,20 @@ const TEAM_VARIANTS = Object.freeze({
   },
 });
 
+const ATLETIEK_NU_EVENT_ALIASES = Object.freeze({
+  "60m": ["60 meter", "60m"],
+  "80m": ["80 meter", "80m"],
+  "1000m": ["1000 meter", "1000m"],
+  "600m": ["600 meter", "600m"],
+  "60mh": ["60 meter horden", "60m horden", "60mh"],
+  "80mh": ["80 meter horden", "80m horden", "80mh"],
+  hoog: ["hoogspringen", "hoogspringen"],
+  ver: ["verspringen"],
+  kogel: ["kogelstoten"],
+  speer: ["speerwerpen"],
+  discus: ["discuswerpen"],
+});
+
 const ATHLETE_ROW_COUNT = 10;
 const ATHLETE_EVENT_LIMIT = 3;
 const EXPORT_TYPE = "atletiekpunten-team-setup";
@@ -115,6 +129,7 @@ function translateEventId(eventId, targetVariantKey) {
 function createEmptyAthleteState() {
   return {
     name: "",
+    profileUrl: "",
     performances: {},
     relay: false,
   };
@@ -142,6 +157,7 @@ function remapStateToVariant(state, targetVariantKey) {
   remappedState.athletes = normalizedState.athletes.map((athlete) => {
     const mappedAthlete = createEmptyAthleteState();
     mappedAthlete.name = athlete.name;
+    mappedAthlete.profileUrl = athlete.profileUrl;
     mappedAthlete.relay = athlete.relay;
 
     Object.entries(athlete.performances).forEach(([eventId, value]) => {
@@ -175,6 +191,7 @@ function normalizeImportedState(rawState) {
 
     baseState.athletes[index] = createEmptyAthleteState();
     baseState.athletes[index].name = typeof athlete.name === "string" ? athlete.name : "";
+    baseState.athletes[index].profileUrl = typeof athlete.profileUrl === "string" ? athlete.profileUrl : "";
     baseState.athletes[index].relay = Boolean(athlete.relay);
 
     const performances = athlete.performances && typeof athlete.performances === "object"
@@ -197,7 +214,9 @@ function readCurrentState() {
 
   for (let index = 0; index < ATHLETE_ROW_COUNT; index += 1) {
     const nameInput = document.querySelector(`[data-athlete-name="${index}"]`);
+    const profileInput = document.querySelector(`[data-athlete-profile="${index}"]`);
     state.athletes[index].name = nameInput ? nameInput.value : "";
+    state.athletes[index].profileUrl = profileInput ? profileInput.value : "";
     const relayCheckbox = document.querySelector(`[data-relay-athlete="${index}"]`);
     state.athletes[index].relay = relayCheckbox ? relayCheckbox.checked : false;
 
@@ -260,12 +279,30 @@ function createAthleteRows() {
     rows.push(`
       <tr data-athlete-row="${index}">
         <th scope="row">
-          <input
-            type="text"
-            class="form-control form-control-sm athlete-name-input"
-            data-athlete-name="${index}"
-            placeholder="Atleet ${index + 1}"
-          >
+          <div class="team-name-stack">
+            <input
+              type="text"
+              class="form-control form-control-sm athlete-name-input"
+              data-athlete-name="${index}"
+              placeholder="Atleet ${index + 1}"
+            >
+            <div class="team-profile-row">
+              <input
+                type="text"
+                class="form-control form-control-sm athlete-profile-input"
+                data-athlete-profile="${index}"
+                placeholder="Atletiek.nu URL of ID"
+              >
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm athlete-profile-import"
+                data-import-profile="${index}"
+              >
+                PR
+              </button>
+            </div>
+            <div class="team-profile-status text-muted" data-profile-status="${index}"></div>
+          </div>
         </th>
         ${cells}
         <td>
@@ -324,9 +361,13 @@ function applyState(rawState) {
 
   normalizedState.athletes.forEach((athlete, index) => {
     const nameInput = document.querySelector(`[data-athlete-name="${index}"]`);
+    const profileInput = document.querySelector(`[data-athlete-profile="${index}"]`);
     const relayCheckbox = document.querySelector(`[data-relay-athlete="${index}"]`);
     if (nameInput) {
       nameInput.value = athlete.name;
+    }
+    if (profileInput) {
+      profileInput.value = athlete.profileUrl;
     }
     if (relayCheckbox) {
       relayCheckbox.checked = athlete.relay;
@@ -347,6 +388,262 @@ function getAthleteName(index) {
   const input = document.querySelector(`[data-athlete-name="${index}"]`);
   const fallbackName = `Atleet ${Number(index) + 1}`;
   return input && input.value.trim() !== "" ? input.value.trim() : fallbackName;
+}
+
+function getProfileStatusNode(index) {
+  return document.querySelector(`[data-profile-status="${index}"]`);
+}
+
+function setProfileStatus(index, message, tone = "muted") {
+  const statusNode = getProfileStatusNode(index);
+  if (!statusNode) {
+    return;
+  }
+
+  statusNode.textContent = message;
+  statusNode.className = "team-profile-status";
+
+  if (tone === "danger") {
+    statusNode.classList.add("text-danger");
+  } else if (tone === "success") {
+    statusNode.classList.add("text-success");
+  } else {
+    statusNode.classList.add("text-muted");
+  }
+}
+
+function normalizeAtletiekNuProfileUrl(input) {
+  const trimmedInput = input.trim();
+  if (trimmedInput === "") {
+    return "";
+  }
+
+  const idMatch = trimmedInput.match(/(?:atleet\/(?:profiel|main)\/)?(\d{4,})/i);
+  if (idMatch) {
+    return `https://www.atletiek.nu/atleet/main/${idMatch[1]}/`;
+  }
+
+  try {
+    const parsedUrl = new URL(trimmedInput);
+    const parsedIdMatch = parsedUrl.pathname.match(/atleet\/(?:profiel|main)\/(\d{4,})/i);
+    if (parsedIdMatch) {
+      return `https://www.atletiek.nu/atleet/main/${parsedIdMatch[1]}/`;
+    }
+  } catch (error) {
+    return "";
+  }
+
+  return "";
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeImportedPerformance(value, eventId) {
+  const trimmedValue = value.trim();
+  if (trimmedValue === "") {
+    return "";
+  }
+
+  if (eventId.match(/^(4x)?\d{1,9}m[hH]?$/)) {
+    return trimmedValue
+      .replace(/\s*h$/i, "")
+      .replace(/,/g, ".");
+  }
+
+  return trimmedValue.replace(/,/g, ".");
+}
+
+function chooseBetterImportedPerformance(eventId, currentValue, candidateValue) {
+  if (currentValue === "") {
+    return candidateValue;
+  }
+
+  if (!validateInput(eventId, currentValue) || !validateInput(eventId, candidateValue)) {
+    return currentValue;
+  }
+
+  const currentParsed = parseSingleInput(eventId, currentValue);
+  const candidateParsed = parseSingleInput(eventId, candidateValue);
+
+  if (!Number.isFinite(currentParsed) || !Number.isFinite(candidateParsed)) {
+    return currentValue;
+  }
+
+  if (eventId.match(/^(4x)?\d{1,9}m[hH]?$/)) {
+    return candidateParsed < currentParsed ? candidateValue : currentValue;
+  }
+
+  return candidateParsed > currentParsed ? candidateValue : currentValue;
+}
+
+function mapAtletiekNuLabelToEventId(label) {
+  const normalizedLabel = label.trim().toLowerCase();
+
+  return Object.entries(ATLETIEK_NU_EVENT_ALIASES).find(([, aliases]) =>
+    aliases.some((alias) => normalizedLabel.startsWith(alias))
+  )?.[0] || null;
+}
+
+function extractRecordsFromHtml(htmlText) {
+  const parser = new DOMParser();
+  const documentNode = parser.parseFromString(htmlText, "text/html");
+  const heading = Array.from(documentNode.querySelectorAll("h1, h2, h3, h4, a, button")).find((node) =>
+    node.textContent.trim().toLowerCase() === "persoonlijke records"
+  );
+
+  const candidateTables = [];
+  if (heading) {
+    let currentNode = heading.parentElement || heading;
+    while (currentNode && currentNode.nextElementSibling) {
+      currentNode = currentNode.nextElementSibling;
+      if (/^H[1-6]$/.test(currentNode.tagName)) {
+        break;
+      }
+      if (currentNode.matches("table")) {
+        candidateTables.push(currentNode);
+      }
+      candidateTables.push(...currentNode.querySelectorAll("table"));
+      if (candidateTables.length > 0) {
+        break;
+      }
+    }
+  }
+
+  const tablesToParse = candidateTables.length > 0
+    ? candidateTables
+    : Array.from(documentNode.querySelectorAll("table"));
+  const records = {};
+
+  tablesToParse.forEach((table) => {
+    table.querySelectorAll("tr").forEach((row) => {
+      const cells = Array.from(row.querySelectorAll("th, td"))
+        .map((cell) => cell.textContent.replace(/\s+/g, " ").trim())
+        .filter((value) => value !== "");
+
+      if (cells.length < 2) {
+        return;
+      }
+
+      const eventId = mapAtletiekNuLabelToEventId(cells[0]);
+      if (!eventId) {
+        return;
+      }
+
+      const normalizedPerformance = normalizeImportedPerformance(cells[1], eventId);
+      if (!validateInput(eventId, normalizedPerformance)) {
+        return;
+      }
+
+      records[eventId] = chooseBetterImportedPerformance(eventId, records[eventId] || "", normalizedPerformance);
+    });
+  });
+
+  return records;
+}
+
+function extractRecordsFromMirrorText(text) {
+  const records = {};
+
+  Object.entries(ATLETIEK_NU_EVENT_ALIASES).forEach(([eventId, aliases]) => {
+    aliases.forEach((alias) => {
+      const pattern = new RegExp(
+        `${escapeRegExp(alias)}(?:\\n[^\\n|]+)?\\s*\\|\\s*([^|\\n]+)`,
+        "gi"
+      );
+
+      let match;
+      while ((match = pattern.exec(text)) !== null) {
+        const normalizedPerformance = normalizeImportedPerformance(match[1], eventId);
+        if (!validateInput(eventId, normalizedPerformance)) {
+          continue;
+        }
+
+        records[eventId] = chooseBetterImportedPerformance(eventId, records[eventId] || "", normalizedPerformance);
+      }
+    });
+  });
+
+  return records;
+}
+
+async function fetchAtletiekNuRecords(profileUrl) {
+  try {
+    const directResponse = await fetch(profileUrl);
+    if (directResponse.ok) {
+      const htmlText = await directResponse.text();
+      const htmlRecords = extractRecordsFromHtml(htmlText);
+      if (Object.keys(htmlRecords).length > 0) {
+        return htmlRecords;
+      }
+    }
+  } catch (error) {
+    console.warn("Direct Atletiek.nu fetch mislukt, probeer fallback.", error);
+  }
+
+  const proxyUrl = `https://r.jina.ai/http://${profileUrl.replace(/^https?:\/\//i, "")}`;
+  const proxyResponse = await fetch(proxyUrl);
+  if (!proxyResponse.ok) {
+    throw new Error("Kon het Atletiek.nu-profiel niet ophalen.");
+  }
+
+  const mirrorText = await proxyResponse.text();
+  const mirrorRecords = extractRecordsFromMirrorText(mirrorText);
+  if (Object.keys(mirrorRecords).length === 0) {
+    throw new Error("Geen bruikbare PR's gevonden op dit profiel.");
+  }
+
+  return mirrorRecords;
+}
+
+async function importAthleteProfile(index) {
+  const profileInput = document.querySelector(`[data-athlete-profile="${index}"]`);
+  const importButton = document.querySelector(`[data-import-profile="${index}"]`);
+  if (!profileInput || !importButton) {
+    return;
+  }
+
+  const normalizedProfileUrl = normalizeAtletiekNuProfileUrl(profileInput.value);
+  if (normalizedProfileUrl === "") {
+    setProfileStatus(index, "Voer een geldig Atletiek.nu-profiel of ID in.", "danger");
+    return;
+  }
+
+  profileInput.value = normalizedProfileUrl;
+  importButton.disabled = true;
+  setProfileStatus(index, "PR's ophalen...", "muted");
+
+  try {
+    const records = await fetchAtletiekNuRecords(normalizedProfileUrl);
+    let importedCount = 0;
+
+    getCurrentTeamEvents().forEach((event) => {
+      const importedValue = records[event.id];
+      if (!importedValue) {
+        return;
+      }
+
+      const input = document.querySelector(`[data-athlete-index="${index}"][data-event="${event.id}"]`);
+      if (!input) {
+        return;
+      }
+
+      input.value = importedValue;
+      importedCount += 1;
+    });
+
+    if (importedCount === 0) {
+      setProfileStatus(index, "Geen matchende PR's voor deze onderdelen gevonden.", "danger");
+    } else {
+      setProfileStatus(index, `${importedCount} PR's ingevuld. Je kunt ze nog aanpassen.`, "success");
+      updateTeamSetup();
+    }
+  } catch (error) {
+    setProfileStatus(index, error.message || "Importeren mislukt.", "danger");
+  } finally {
+    importButton.disabled = false;
+  }
 }
 
 function updateRelayName() {
@@ -558,10 +855,11 @@ function stateToWorkbook(state) {
     ["relayValue", state.relay.value],
   ];
 
-  const athleteHeader = ["index", "name", ...variant.events.map((event) => event.id), "relay"];
+  const athleteHeader = ["index", "name", "profileUrl", ...variant.events.map((event) => event.id), "relay"];
   const athleteRows = state.athletes.map((athlete, index) => [
     index + 1,
     athlete.name,
+    athlete.profileUrl,
     ...variant.events.map((event) => athlete.performances[event.id] || ""),
     athlete.relay,
   ]);
@@ -620,9 +918,10 @@ function workbookToState(workbook) {
     throw new Error("Excelbestand heeft geen geldige athletes-header.");
   }
 
+  const profileColumnIndex = headerRow.findIndex((value) => String(value) === "profileUrl");
   const relayColumnIndex = headerRow.findIndex((value) => String(value) === "relay");
   const eventColumns = headerRow
-    .slice(2, relayColumnIndex === -1 ? undefined : relayColumnIndex)
+    .slice(profileColumnIndex === -1 ? 2 : profileColumnIndex + 1, relayColumnIndex === -1 ? undefined : relayColumnIndex)
     .map((value) => String(value));
 
   for (let index = 1; index < athleteRows.length && index <= ATHLETE_ROW_COUNT; index += 1) {
@@ -632,13 +931,18 @@ function workbookToState(workbook) {
     }
 
     state.athletes[index - 1].name = typeof row[1] === "string" ? row[1] : row[1] == null ? "" : String(row[1]);
+    if (profileColumnIndex !== -1) {
+      const profileValue = row[profileColumnIndex];
+      state.athletes[index - 1].profileUrl = typeof profileValue === "string" ? profileValue : profileValue == null ? "" : String(profileValue);
+    }
     if (relayColumnIndex !== -1) {
       const relayValue = row[relayColumnIndex];
       state.athletes[index - 1].relay = relayValue === true || String(relayValue).toLowerCase() === "true";
     }
 
     eventColumns.forEach((eventId, columnIndex) => {
-      const cellValue = row[columnIndex + 2];
+      const firstEventColumnIndex = profileColumnIndex === -1 ? 2 : profileColumnIndex + 1;
+      const cellValue = row[columnIndex + firstEventColumnIndex];
       if (cellValue === "" || cellValue == null) {
         return;
       }
@@ -726,6 +1030,12 @@ document.addEventListener("input", (event) => {
     event.target.matches("#team-name")
   ) {
     updateTeamSetup();
+  }
+});
+
+document.addEventListener("click", (event) => {
+  if (event.target.matches(".athlete-profile-import")) {
+    importAthleteProfile(event.target.dataset.importProfile);
   }
 });
 
