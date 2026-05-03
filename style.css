@@ -172,6 +172,16 @@
   line-height: 1.2;
 }
 
+.team-event-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  color: #6c757d;
+}
+
 .relay-athlete-selects {
   display: grid;
   gap: 0.35rem;
