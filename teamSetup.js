@@ -51,6 +51,169 @@ const ATLETIEK_NU_EVENT_ALIASES = Object.freeze({
   discus: ["discuswerpen"],
 });
 
+const ATLETIEK_NU_EVENT_WEIGHT_RULES = Object.freeze({
+  kogel: {
+    u14_girls: /\b2(?:\.0)?\s*kg\b/i,
+    u14_boys: /\b3(?:\.0)?\s*kg\b/i,
+  },
+  discus: {
+    u14_girls: /\b750\s*g\b|\b0(?:\.75)?\s*kg\b/i,
+    u14_boys: /\b1(?:\.0)?\s*kg\b/i,
+  },
+  speer: {
+    u14_girls: /\b400\s*g\b|\b0(?:\.4)?\s*kg\b/i,
+    u14_boys: /\b400\s*g\b|\b0(?:\.4)?\s*kg\b/i,
+  },
+});
+
+const ATLETIEK_NU_SKIP_SUBHEADING_PATTERNS = [
+  /onbekende hoogte/i,
+  /onbekende windmeting/i,
+  /ongeldige windmeting/i,
+  /ongeldig/i,
+];
+
+const ATLETIEK_NU_NO_SUBHEADING_EVENTS = new Set(["60m", "80m", "1000m", "600m", "ver"]);
+
+function mapAtletiekNuLabelToEventIdAndAlias(label) {
+  const normalizedLabel = label.trim().toLowerCase();
+
+  for (const [eventId, aliases] of Object.entries(ATLETIEK_NU_EVENT_ALIASES)) {
+    const alias = aliases.find((aliasText) => normalizedLabel.startsWith(aliasText.toLowerCase()));
+    if (alias) {
+      return { eventId, alias };
+    }
+  }
+
+  return null;
+}
+
+function mapAtletiekNuLabelToEventId(label) {
+  return mapAtletiekNuLabelToEventIdAndAlias(label)?.eventId || null;
+}
+
+function getAtletiekNuSubheading(label, alias) {
+  const normalizedLabel = label.trim();
+  const subheading = normalizedLabel.slice(alias.length).trim();
+  return subheading.replace(/^[\s:\-–]+/, "");
+}
+
+function isSkipAtletiekNuSubheading(subheading) {
+  if (!subheading) {
+    return false;
+  }
+
+  return ATLETIEK_NU_SKIP_SUBHEADING_PATTERNS.some((pattern) => pattern.test(subheading));
+}
+
+function getAtletiekNuWeightPattern(eventId, variantKey) {
+  const rule = ATLETIEK_NU_EVENT_WEIGHT_RULES[eventId];
+  return rule ? rule[variantKey] : null;
+}
+
+function chooseBestAtletiekNuPerformance(eventId, left, right) {
+  if (chooseBetterImportedPerformance(eventId, left, right) === right) {
+    return right;
+  }
+  return left;
+}
+
+function chooseBestAtletiekNuRecord(eventId, candidates, variantKey, diagnostics) {
+  const candidateDetails = candidates.map((candidate) => ({
+    eventId: candidate.eventId,
+    performance: candidate.performance,
+    subheading: candidate.subheading,
+    rawLabel: candidate.rawLabel,
+  }));
+
+  const validCandidates = candidates.filter((candidate) => !isSkipAtletiekNuSubheading(candidate.subheading));
+
+  if (validCandidates.length === 0) {
+    diagnostics.push({
+      eventId,
+      selected: null,
+      candidates: candidateDetails,
+      reason: "Alle kandidaten zijn overgeslagen vanwege niet-bruikbare subkoppen.",
+    });
+    return null;
+  }
+
+  let preferredCandidates = validCandidates;
+  const weightPattern = getAtletiekNuWeightPattern(eventId, variantKey);
+  if (weightPattern) {
+    const weightedCandidates = validCandidates.filter((candidate) => weightPattern.test(candidate.subheading));
+    if (weightedCandidates.length > 0) {
+      preferredCandidates = weightedCandidates;
+    }
+  }
+
+  if (ATLETIEK_NU_NO_SUBHEADING_EVENTS.has(eventId)) {
+    const noSubheadingCandidates = preferredCandidates.filter((candidate) => candidate.subheading === "");
+    if (noSubheadingCandidates.length > 0) {
+      preferredCandidates = noSubheadingCandidates;
+    }
+  }
+
+  const chosen = preferredCandidates.reduce((best, candidate) => {
+    if (!best) {
+      return candidate;
+    }
+    return chooseBestAtletiekNuPerformance(eventId, best.performance, candidate.performance) === candidate.performance
+      ? candidate
+      : best;
+  }, null);
+
+  diagnostics.push({
+    eventId,
+    selected: chosen ? {
+      performance: chosen.performance,
+      subheading: chosen.subheading,
+      rawLabel: chosen.rawLabel,
+    } : null,
+    candidates: candidateDetails,
+    reason: chosen
+      ? preferredCandidates.length !== validCandidates.length
+        ? "Gekozen uit gefilterde kandidaten vanwege juiste subkop of gewicht."
+        : "Gekozen uit alle geldige kandidaten."
+      : "Geen geschikte kandidaat gevonden.",
+  });
+
+  return chosen ? chosen.performance : null;
+}
+
+function selectBestAtletiekNuRecords(candidates, variantKey, diagnostics) {
+  const grouped = candidates.reduce((acc, candidate) => {
+    acc[candidate.eventId] = acc[candidate.eventId] || [];
+    acc[candidate.eventId].push(candidate);
+    return acc;
+  }, {});
+
+  return Object.entries(grouped).reduce((records, [eventId, eventCandidates]) => {
+    const selectedPerformance = chooseBestAtletiekNuRecord(eventId, eventCandidates, variantKey, diagnostics);
+    if (selectedPerformance) {
+      records[eventId] = selectedPerformance;
+    }
+    return records;
+  }, {});
+}
+
+function logAtletiekNuSelectionDiagnostics(source, profileUrl, variantKey, diagnostics) {
+  if (diagnostics.length === 0) {
+    console.info(`Atletiek.nu ${source} import: geen PR-kandidaten gevonden voor ${profileUrl}`);
+    return;
+  }
+
+  console.groupCollapsed(`Atletiek.nu ${source} import diagnostics (${variantKey}): ${profileUrl}`);
+  diagnostics.forEach((entry) => {
+    console.groupCollapsed(`Event ${entry.eventId}`);
+    console.log("Geselecteerde kandidaat:", entry.selected);
+    console.log("Reden:", entry.reason);
+    console.log("Alle kandidaten:", entry.candidates);
+    console.groupEnd();
+  });
+  console.groupEnd();
+}
+
 const ATHLETE_ROW_COUNT = 10;
 const ATHLETE_EVENT_LIMIT = 3;
 const EXPORT_TYPE = "atletiekpunten-team-setup";
@@ -420,6 +583,8 @@ function setProfileStatus(index, message, tone = "muted") {
 
   if (tone === "danger") {
     statusNode.classList.add("text-danger");
+  } else if (tone === "warning") {
+    statusNode.classList.add("text-warning");
   } else if (tone === "success") {
     statusNode.classList.add("text-success");
   } else {
@@ -493,15 +658,9 @@ function chooseBetterImportedPerformance(eventId, currentValue, candidateValue) 
   return candidateParsed > currentParsed ? candidateValue : currentValue;
 }
 
-function mapAtletiekNuLabelToEventId(label) {
-  const normalizedLabel = label.trim().toLowerCase();
 
-  return Object.entries(ATLETIEK_NU_EVENT_ALIASES).find(([, aliases]) =>
-    aliases.some((alias) => normalizedLabel.startsWith(alias))
-  )?.[0] || null;
-}
 
-function extractRecordsFromHtml(htmlText) {
+function extractRecordsFromHtml(htmlText, variantKey, profileUrl) {
   const parser = new DOMParser();
   const documentNode = parser.parseFromString(htmlText, "text/html");
   const heading = Array.from(documentNode.querySelectorAll("h1, h2, h3, h4, a, button")).find((node) =>
@@ -529,7 +688,7 @@ function extractRecordsFromHtml(htmlText) {
   const tablesToParse = candidateTables.length > 0
     ? candidateTables
     : Array.from(documentNode.querySelectorAll("table"));
-  const records = {};
+  const candidates = [];
 
   tablesToParse.forEach((table) => {
     table.querySelectorAll("tr").forEach((row) => {
@@ -541,57 +700,90 @@ function extractRecordsFromHtml(htmlText) {
         return;
       }
 
-      const eventId = mapAtletiekNuLabelToEventId(cells[0]);
-      if (!eventId) {
+      const mapped = mapAtletiekNuLabelToEventIdAndAlias(cells[0]);
+      if (!mapped) {
         return;
       }
 
+      const eventId = mapped.eventId;
+      const subheading = getAtletiekNuSubheading(cells[0], mapped.alias);
       const normalizedPerformance = normalizeImportedPerformance(cells[1], eventId);
       if (!validateInput(eventId, normalizedPerformance)) {
         return;
       }
 
-      records[eventId] = chooseBetterImportedPerformance(eventId, records[eventId] || "", normalizedPerformance);
+      candidates.push({
+        eventId,
+        performance: normalizedPerformance,
+        subheading,
+        rawLabel: cells[0],
+      });
     });
   });
 
+  const diagnostics = [];
+  const records = selectBestAtletiekNuRecords(candidates, variantKey, diagnostics);
+  logAtletiekNuSelectionDiagnostics("HTML", profileUrl, variantKey, diagnostics);
   return records;
 }
 
-function extractRecordsFromMirrorText(text) {
-  const records = {};
+function extractRecordsFromMirrorText(text, variantKey, profileUrl) {
+  const candidates = [];
 
   Object.entries(ATLETIEK_NU_EVENT_ALIASES).forEach(([eventId, aliases]) => {
     aliases.forEach((alias) => {
       const pattern = new RegExp(
-        `${escapeRegExp(alias)}(?:\\n[^\\n|]+)?\\s*\\|\\s*([^|\\n]+)`,
+        `${escapeRegExp(alias)}([^|\\n]*)\\|\\s*([^|\\n]+)`,
         "gi"
       );
 
       let match;
       while ((match = pattern.exec(text)) !== null) {
-        const normalizedPerformance = normalizeImportedPerformance(match[1], eventId);
+        const rawLabel = `${alias}${match[1]}`.trim();
+        const mapped = mapAtletiekNuLabelToEventIdAndAlias(rawLabel);
+        if (!mapped) {
+          continue;
+        }
+
+        const eventSubheading = getAtletiekNuSubheading(rawLabel, mapped.alias);
+        const normalizedPerformance = normalizeImportedPerformance(match[2], eventId);
         if (!validateInput(eventId, normalizedPerformance)) {
           continue;
         }
 
-        records[eventId] = chooseBetterImportedPerformance(eventId, records[eventId] || "", normalizedPerformance);
+        candidates.push({
+          eventId,
+          performance: normalizedPerformance,
+          subheading: eventSubheading,
+          rawLabel,
+        });
       }
     });
   });
 
+  const diagnostics = [];
+  const records = selectBestAtletiekNuRecords(candidates, variantKey, diagnostics);
+  logAtletiekNuSelectionDiagnostics("proxy", profileUrl, variantKey, diagnostics);
   return records;
 }
 
-async function fetchAtletiekNuRecords(profileUrl) {
+
+async function fetchAtletiekNuRecords(profileUrl, variantKey) {
   try {
+    console.info("Proberen Atletiek.nu-profiel direct op te halen...", profileUrl);
     const directResponse = await fetch(profileUrl);
     if (directResponse.ok) {
       const htmlText = await directResponse.text();
-      const htmlRecords = extractRecordsFromHtml(htmlText);
+      const htmlRecords = extractRecordsFromHtml(htmlText, variantKey, profileUrl);
       if (Object.keys(htmlRecords).length > 0) {
         return htmlRecords;
       }
+      console.warn("Direct Atletiek.nu fetch leverde geen bruikbare records op.", profileUrl);
+    } else {
+      console.warn(
+        `Direct Atletiek.nu fetch gaf status ${directResponse.status} ${directResponse.statusText}.`,
+        profileUrl
+      );
     }
   } catch (error) {
     console.warn("Direct Atletiek.nu fetch mislukt, probeer fallback.", error);
@@ -600,11 +792,15 @@ async function fetchAtletiekNuRecords(profileUrl) {
   const proxyUrl = `https://r.jina.ai/http://${profileUrl.replace(/^https?:\/\//i, "")}`;
   const proxyResponse = await fetch(proxyUrl);
   if (!proxyResponse.ok) {
-    throw new Error("Kon het Atletiek.nu-profiel niet ophalen.");
+    const proxyStatus = `(${proxyResponse.status} ${proxyResponse.statusText})`;
+    if (proxyResponse.status === 451) {
+      throw new Error(`Kon het Atletiek.nu-profiel niet ophalen via proxy. Beschikbaarheidsfout 451: dit profiel is mogelijk geblokkeerd of niet toegankelijk.`);
+    }
+    throw new Error(`Kon het Atletiek.nu-profiel niet ophalen via proxy ${proxyStatus}.`);
   }
 
   const mirrorText = await proxyResponse.text();
-  const mirrorRecords = extractRecordsFromMirrorText(mirrorText);
+  const mirrorRecords = extractRecordsFromMirrorText(mirrorText, variantKey, profileUrl);
   if (Object.keys(mirrorRecords).length === 0) {
     throw new Error("Geen bruikbare PR's gevonden op dit profiel.");
   }
@@ -630,13 +826,17 @@ async function importAthleteProfile(index) {
   setProfileStatus(index, "PR's ophalen...", "muted");
 
   try {
-    const records = await fetchAtletiekNuRecords(normalizedProfileUrl);
+    const records = await fetchAtletiekNuRecords(normalizedProfileUrl, currentVariantKey);
+    const selectedEvents = getCurrentTeamEvents().filter((event) => {
+      const selectedInput = document.querySelector(`[data-selected-event="${index}-${event.id}"]`);
+      return selectedInput && selectedInput.checked;
+    });
+
     let importedCount = 0;
 
-    getCurrentTeamEvents().forEach((event) => {
+    selectedEvents.forEach((event) => {
       const importedValue = records[event.id];
-      const selectedInput = document.querySelector(`[data-selected-event="${index}-${event.id}"]`);
-      if (!selectedInput || !selectedInput.checked || !importedValue) {
+      if (!importedValue) {
         return;
       }
 
@@ -650,7 +850,10 @@ async function importAthleteProfile(index) {
     });
 
     if (importedCount === 0) {
-      setProfileStatus(index, "Geen matchende PR's voor deze onderdelen gevonden.", "danger");
+      setProfileStatus(index, "Geen matchende PR's voor de geselecteerde onderdelen gevonden. Controleer het profiel en kijk in de console voor details.", "danger");
+    } else if (importedCount < selectedEvents.length) {
+      setProfileStatus(index, `${importedCount} PR's ingevuld. Sommige geselecteerde onderdelen konden niet worden gevonden. Controleer de console voor details.`, "warning");
+      updateTeamSetup();
     } else {
       setProfileStatus(index, `${importedCount} PR's ingevuld. Je kunt ze nog aanpassen.`, "success");
       updateTeamSetup();
