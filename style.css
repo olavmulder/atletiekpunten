@@ -129,6 +129,12 @@
   line-height: 1;
 }
 
+.team-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .team-setup-table th,
 .team-setup-table td,
 .relay-table th,
@@ -180,5 +186,9 @@
 
   .team-total-box strong {
     font-size: 1.6rem;
+  }
+
+  .team-actions .btn {
+    flex: 1 1 220px;
   }
 }
