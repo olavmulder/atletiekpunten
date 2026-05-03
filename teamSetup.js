@@ -281,7 +281,7 @@ function createAthleteRows() {
               class="form-check-input team-event-selected-input"
               data-selected-event="${index}-${event.id}"
             >
-            <span>Inzet</span>
+            <span>Select</span>
           </label>
           <input
             type="text"
@@ -435,14 +435,14 @@ function normalizeAtletiekNuProfileUrl(input) {
 
   const idMatch = trimmedInput.match(/(?:atleet\/(?:profiel|main)\/)?(\d{4,})/i);
   if (idMatch) {
-    return `https://www.atletiek.nu/atleet/main/${idMatch[1]}/`;
+    return `https://www.atletiek.nu/atleet/profiel/${idMatch[1]}/`;
   }
 
   try {
     const parsedUrl = new URL(trimmedInput);
     const parsedIdMatch = parsedUrl.pathname.match(/atleet\/(?:profiel|main)\/(\d{4,})/i);
     if (parsedIdMatch) {
-      return `https://www.atletiek.nu/atleet/main/${parsedIdMatch[1]}/`;
+      return `https://www.atletiek.nu/atleet/profiel/${parsedIdMatch[1]}/`;
     }
   } catch (error) {
     return "";
