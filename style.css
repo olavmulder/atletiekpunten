@@ -108,3 +108,77 @@
     flex: 0 0 50px;
   }
 }
+
+.team-setup-page {
+  max-width: 1400px;
+}
+
+.team-total-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background: #f8f9fa;
+}
+
+.team-total-box strong {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.team-setup-table th,
+.team-setup-table td,
+.relay-table th,
+.relay-table td {
+  vertical-align: middle;
+  text-align: center;
+}
+
+.team-setup-table .name-col {
+  min-width: 180px;
+}
+
+.team-setup-table .assignment-col {
+  min-width: 90px;
+}
+
+.team-cell {
+  min-width: 110px;
+}
+
+.team-points {
+  margin-top: 0.35rem;
+  font-size: 0.875rem;
+  color: #6c757d;
+}
+
+.counted-performance {
+  background-color: #d1e7dd !important;
+  border-color: #75b798 !important;
+  color: #0f5132 !important;
+}
+
+.summary-card {
+  padding: 1rem;
+  border: 1px solid #dee2e6;
+  border-radius: 0.75rem;
+  background: #fff;
+  text-align: left;
+}
+
+.summary-list {
+  min-height: 48px;
+}
+
+@media (max-width: 768px) {
+  .team-cell {
+    min-width: 92px;
+  }
+
+  .team-total-box strong {
+    font-size: 1.6rem;
+  }
+}
