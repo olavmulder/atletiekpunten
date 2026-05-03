@@ -50,6 +50,7 @@ const teamTotalPoints = document.getElementById("team-total-points");
 const relayPoints = document.getElementById("relay-points");
 const teamNameInput = document.getElementById("team-name");
 const relayTeamName = document.getElementById("relay-team-name");
+const relayAthletes = document.getElementById("relay-athletes");
 const relayInput = document.getElementById("relay-input");
 const relayHeaderLabel = document.getElementById("relay-header-label");
 const variantSelect = document.getElementById("team-variant");
@@ -79,7 +80,7 @@ function getCurrentRelayLabel() {
 }
 
 function getAssignmentLimitTotal() {
-  return getCurrentTeamEvents().reduce((sum, event) => sum + event.limit, 0);
+  return getCurrentTeamEvents().reduce((sum, event) => sum + event.limit, 0) + 4;
 }
 
 function getVariantForEventId(eventId) {
@@ -115,6 +116,7 @@ function createEmptyAthleteState() {
   return {
     name: "",
     performances: {},
+    relay: false,
   };
 }
 
@@ -140,6 +142,7 @@ function remapStateToVariant(state, targetVariantKey) {
   remappedState.athletes = normalizedState.athletes.map((athlete) => {
     const mappedAthlete = createEmptyAthleteState();
     mappedAthlete.name = athlete.name;
+    mappedAthlete.relay = athlete.relay;
 
     Object.entries(athlete.performances).forEach(([eventId, value]) => {
       const targetEventId = translateEventId(eventId, targetVariantKey);
@@ -172,6 +175,7 @@ function normalizeImportedState(rawState) {
 
     baseState.athletes[index] = createEmptyAthleteState();
     baseState.athletes[index].name = typeof athlete.name === "string" ? athlete.name : "";
+    baseState.athletes[index].relay = Boolean(athlete.relay);
 
     const performances = athlete.performances && typeof athlete.performances === "object"
       ? athlete.performances
@@ -194,6 +198,8 @@ function readCurrentState() {
   for (let index = 0; index < ATHLETE_ROW_COUNT; index += 1) {
     const nameInput = document.querySelector(`[data-athlete-name="${index}"]`);
     state.athletes[index].name = nameInput ? nameInput.value : "";
+    const relayCheckbox = document.querySelector(`[data-relay-athlete="${index}"]`);
+    state.athletes[index].relay = relayCheckbox ? relayCheckbox.checked : false;
 
     getCurrentTeamEvents().forEach((event) => {
       const input = document.querySelector(`[data-athlete-index="${index}"][data-event="${event.id}"]`);
@@ -214,6 +220,7 @@ function renderTableStructure() {
     <tr>
       <th scope="col" class="name-col">Atleet</th>
       ${headCells}
+      <th scope="col">Est.</th>
       <th scope="col" class="assignment-col">Totaal</th>
     </tr>
   `;
@@ -225,6 +232,7 @@ function renderTableStructure() {
     <tr class="table-light">
       <th scope="row">Totaal</th>
       ${footerCells}
+      <td id="relay-assigned-total">0 / 4</td>
       <td id="assigned-total">0 / ${getAssignmentLimitTotal()}</td>
     </tr>
   `;
@@ -260,6 +268,16 @@ function createAthleteRows() {
           >
         </th>
         ${cells}
+        <td>
+          <div class="form-check d-flex justify-content-center mb-0">
+            <input
+              type="checkbox"
+              class="form-check-input relay-athlete-input"
+              data-relay-athlete="${index}"
+              aria-label="Atleet ${index + 1} loopt estafette"
+            >
+          </div>
+        </td>
         <td class="fw-semibold" data-athlete-total="${index}">0 / ${ATHLETE_EVENT_LIMIT}</td>
       </tr>
     `);
@@ -306,8 +324,12 @@ function applyState(rawState) {
 
   normalizedState.athletes.forEach((athlete, index) => {
     const nameInput = document.querySelector(`[data-athlete-name="${index}"]`);
+    const relayCheckbox = document.querySelector(`[data-relay-athlete="${index}"]`);
     if (nameInput) {
       nameInput.value = athlete.name;
+    }
+    if (relayCheckbox) {
+      relayCheckbox.checked = athlete.relay;
     }
 
     Object.entries(athlete.performances).forEach(([eventId, value]) => {
@@ -330,6 +352,34 @@ function getAthleteName(index) {
 function updateRelayName() {
   const teamName = teamNameInput.value.trim();
   relayTeamName.textContent = teamName === "" ? "Team naam" : teamName;
+}
+
+function getSelectedRelayAthletes() {
+  const selectedAthletes = [];
+
+  for (let index = 0; index < ATHLETE_ROW_COUNT; index += 1) {
+    const relayCheckbox = document.querySelector(`[data-relay-athlete="${index}"]`);
+    if (relayCheckbox && relayCheckbox.checked) {
+      selectedAthletes.push({
+        index,
+        name: getAthleteName(index),
+      });
+    }
+  }
+
+  return selectedAthletes;
+}
+
+function updateRelaySelectionSummary(selectedRelayAthletes) {
+  relayAthletes.textContent = selectedRelayAthletes.length === 0
+    ? "Nog geen atleten geselecteerd"
+    : selectedRelayAthletes.map((athlete) => athlete.name).join(", ");
+
+  relayAthletes.classList.toggle("text-danger", selectedRelayAthletes.length > 4);
+
+  const relayAssignedTotal = document.getElementById("relay-assigned-total");
+  relayAssignedTotal.textContent = `${selectedRelayAthletes.length} / 4`;
+  relayAssignedTotal.classList.toggle("text-danger", selectedRelayAthletes.length > 4);
 }
 
 function collectValidEntries() {
@@ -381,16 +431,20 @@ function collectValidEntries() {
   return entries;
 }
 
-function updateAthleteTotals(entries) {
+function updateAthleteTotals(entries, selectedRelayAthletes) {
+  const relayAthleteIndexes = new Set(selectedRelayAthletes.map((athlete) => athlete.index));
+
   for (let index = 0; index < ATHLETE_ROW_COUNT; index += 1) {
     const athleteEntries = entries.filter((entry) => Number(entry.athleteIndex) === index);
+    const relayCount = relayAthleteIndexes.has(index) ? 1 : 0;
     const totalNode = document.querySelector(`[data-athlete-total="${index}"]`);
-    totalNode.textContent = `${athleteEntries.length} / ${ATHLETE_EVENT_LIMIT}`;
-    totalNode.classList.toggle("text-danger", athleteEntries.length > ATHLETE_EVENT_LIMIT);
+    const totalEvents = athleteEntries.length + relayCount;
+    totalNode.textContent = `${totalEvents} / ${ATHLETE_EVENT_LIMIT}`;
+    totalNode.classList.toggle("text-danger", totalEvents > ATHLETE_EVENT_LIMIT);
   }
 }
 
-function updateEventSummaries(entries) {
+function updateEventSummaries(entries, selectedRelayAthletes) {
   let totalPoints = 0;
   let totalAssignments = 0;
 
@@ -426,7 +480,7 @@ function updateEventSummaries(entries) {
   });
 
   const assignedTotal = document.getElementById("assigned-total");
-  assignedTotal.textContent = `${totalAssignments} / ${getAssignmentLimitTotal()}`;
+  assignedTotal.textContent = `${totalAssignments + selectedRelayAthletes.length} / ${getAssignmentLimitTotal()}`;
 
   return totalPoints;
 }
@@ -465,8 +519,10 @@ function updateTeamSetup() {
   updateRelayName();
 
   const entries = collectValidEntries();
-  updateAthleteTotals(entries);
-  const basePoints = updateEventSummaries(entries);
+  const selectedRelayAthletes = getSelectedRelayAthletes();
+  updateRelaySelectionSummary(selectedRelayAthletes);
+  updateAthleteTotals(entries, selectedRelayAthletes);
+  const basePoints = updateEventSummaries(entries, selectedRelayAthletes);
   const relayTeamPoints = updateRelayPoints();
 
   teamTotalPoints.textContent = String(basePoints + relayTeamPoints);
@@ -502,11 +558,12 @@ function stateToWorkbook(state) {
     ["relayValue", state.relay.value],
   ];
 
-  const athleteHeader = ["index", "name", ...variant.events.map((event) => event.id)];
+  const athleteHeader = ["index", "name", ...variant.events.map((event) => event.id), "relay"];
   const athleteRows = state.athletes.map((athlete, index) => [
     index + 1,
     athlete.name,
     ...variant.events.map((event) => athlete.performances[event.id] || ""),
+    athlete.relay,
   ]);
 
   const metaSheet = XLSX.utils.aoa_to_sheet(metaRows);
@@ -563,7 +620,10 @@ function workbookToState(workbook) {
     throw new Error("Excelbestand heeft geen geldige athletes-header.");
   }
 
-  const eventColumns = headerRow.slice(2).map((value) => String(value));
+  const relayColumnIndex = headerRow.findIndex((value) => String(value) === "relay");
+  const eventColumns = headerRow
+    .slice(2, relayColumnIndex === -1 ? undefined : relayColumnIndex)
+    .map((value) => String(value));
 
   for (let index = 1; index < athleteRows.length && index <= ATHLETE_ROW_COUNT; index += 1) {
     const row = athleteRows[index];
@@ -572,6 +632,10 @@ function workbookToState(workbook) {
     }
 
     state.athletes[index - 1].name = typeof row[1] === "string" ? row[1] : row[1] == null ? "" : String(row[1]);
+    if (relayColumnIndex !== -1) {
+      const relayValue = row[relayColumnIndex];
+      state.athletes[index - 1].relay = relayValue === true || String(relayValue).toLowerCase() === "true";
+    }
 
     eventColumns.forEach((eventId, columnIndex) => {
       const cellValue = row[columnIndex + 2];
@@ -657,6 +721,7 @@ document.addEventListener("input", (event) => {
   if (
     event.target.matches(".team-performance-input") ||
     event.target.matches(".athlete-name-input") ||
+    event.target.matches(".relay-athlete-input") ||
     event.target.matches("#relay-input") ||
     event.target.matches("#team-name")
   ) {
