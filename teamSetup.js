@@ -212,13 +212,14 @@ function readCurrentState() {
   state.teamName = teamNameInput.value;
   state.relay.value = relayInput.value;
 
+  const selectedRelayIndexes = new Set(getSelectedRelayIndexesFromSelectors());
+
   for (let index = 0; index < ATHLETE_ROW_COUNT; index += 1) {
     const nameInput = document.querySelector(`[data-athlete-name="${index}"]`);
     const profileInput = document.querySelector(`[data-athlete-profile="${index}"]`);
     state.athletes[index].name = nameInput ? nameInput.value : "";
     state.athletes[index].profileUrl = profileInput ? profileInput.value : "";
-    const relayCheckbox = document.querySelector(`[data-relay-athlete="${index}"]`);
-    state.athletes[index].relay = relayCheckbox ? relayCheckbox.checked : false;
+    state.athletes[index].relay = selectedRelayIndexes.has(index);
 
     getCurrentTeamEvents().forEach((event) => {
       const input = document.querySelector(`[data-athlete-index="${index}"][data-event="${event.id}"]`);
@@ -239,7 +240,6 @@ function renderTableStructure() {
     <tr>
       <th scope="col" class="name-col">Atleet</th>
       ${headCells}
-      <th scope="col">Est.</th>
       <th scope="col" class="assignment-col">Totaal</th>
     </tr>
   `;
@@ -305,16 +305,6 @@ function createAthleteRows() {
           </div>
         </th>
         ${cells}
-        <td>
-          <div class="form-check d-flex justify-content-center mb-0">
-            <input
-              type="checkbox"
-              class="form-check-input relay-athlete-input"
-              data-relay-athlete="${index}"
-              aria-label="Atleet ${index + 1} loopt estafette"
-            >
-          </div>
-        </td>
         <td class="fw-semibold" data-athlete-total="${index}">0 / ${ATHLETE_EVENT_LIMIT}</td>
       </tr>
     `);
@@ -348,6 +338,7 @@ function renderVariantLayout() {
   renderTableStructure();
   createAthleteRows();
   createSummaryCards();
+  createRelaySelectors();
 }
 
 function applyState(rawState) {
@@ -362,15 +353,11 @@ function applyState(rawState) {
   normalizedState.athletes.forEach((athlete, index) => {
     const nameInput = document.querySelector(`[data-athlete-name="${index}"]`);
     const profileInput = document.querySelector(`[data-athlete-profile="${index}"]`);
-    const relayCheckbox = document.querySelector(`[data-relay-athlete="${index}"]`);
     if (nameInput) {
       nameInput.value = athlete.name;
     }
     if (profileInput) {
       profileInput.value = athlete.profileUrl;
-    }
-    if (relayCheckbox) {
-      relayCheckbox.checked = athlete.relay;
     }
 
     Object.entries(athlete.performances).forEach(([eventId, value]) => {
@@ -380,6 +367,8 @@ function applyState(rawState) {
       }
     });
   });
+
+  applyRelaySelectorsFromState(normalizedState);
 
   updateTeamSetup();
 }
@@ -651,32 +640,76 @@ function updateRelayName() {
   relayTeamName.textContent = teamName === "" ? "Team naam" : teamName;
 }
 
-function getSelectedRelayAthletes() {
-  const selectedAthletes = [];
+function createRelaySelectors() {
+  const selectorMarkup = Array.from({ length: 4 }, (_, index) => `
+    <select class="form-select form-select-sm relay-athlete-select" data-relay-slot="${index}">
+      <option value="">Kies atleet ${index + 1}</option>
+    </select>
+  `).join("");
 
-  for (let index = 0; index < ATHLETE_ROW_COUNT; index += 1) {
-    const relayCheckbox = document.querySelector(`[data-relay-athlete="${index}"]`);
-    if (relayCheckbox && relayCheckbox.checked) {
-      selectedAthletes.push({
-        index,
-        name: getAthleteName(index),
-      });
+  relayAthletes.innerHTML = selectorMarkup;
+  refreshRelaySelectorOptions();
+}
+
+function getRelaySelectorNodes() {
+  return Array.from(document.querySelectorAll(".relay-athlete-select"));
+}
+
+function getSelectedRelayIndexesFromSelectors() {
+  return getRelaySelectorNodes()
+    .map((select) => {
+      if (select.value === "") {
+        return null;
+      }
+      return Number(select.value);
+    })
+    .filter((value) => Number.isInteger(value));
+}
+
+function refreshRelaySelectorOptions() {
+  const selectors = getRelaySelectorNodes();
+  const currentSelections = selectors.map((select) => select.value);
+
+  selectors.forEach((select, selectorIndex) => {
+    const options = [`<option value="">Kies atleet ${selectorIndex + 1}</option>`];
+
+    for (let athleteIndex = 0; athleteIndex < ATHLETE_ROW_COUNT; athleteIndex += 1) {
+      const athleteName = getAthleteName(athleteIndex);
+      options.push(`<option value="${athleteIndex}">${athleteName}</option>`);
     }
-  }
 
-  return selectedAthletes;
+    select.innerHTML = options.join("");
+    select.value = currentSelections[selectorIndex] || "";
+  });
+}
+
+function applyRelaySelectorsFromState(state) {
+  const relayIndexes = state.athletes
+    .map((athlete, index) => athlete.relay ? index : null)
+    .filter((value) => value !== null)
+    .slice(0, 4);
+
+  getRelaySelectorNodes().forEach((select, index) => {
+    select.value = relayIndexes[index] != null ? String(relayIndexes[index]) : "";
+  });
+}
+
+function getSelectedRelayAthletes() {
+  return getSelectedRelayIndexesFromSelectors().map((index) => ({
+    index,
+    name: getAthleteName(index),
+  }));
 }
 
 function updateRelaySelectionSummary(selectedRelayAthletes) {
-  relayAthletes.textContent = selectedRelayAthletes.length === 0
-    ? "Nog geen atleten geselecteerd"
-    : selectedRelayAthletes.map((athlete) => athlete.name).join(", ");
+  const selectedIndexes = selectedRelayAthletes.map((athlete) => athlete.index);
+  const hasDuplicates = new Set(selectedIndexes).size !== selectedIndexes.length;
 
-  relayAthletes.classList.toggle("text-danger", selectedRelayAthletes.length > 4);
+  relayAthletes.classList.toggle("text-danger", hasDuplicates);
 
   const relayAssignedTotal = document.getElementById("relay-assigned-total");
   relayAssignedTotal.textContent = `${selectedRelayAthletes.length} / 4`;
-  relayAssignedTotal.classList.toggle("text-danger", selectedRelayAthletes.length > 4);
+  relayAssignedTotal.classList.toggle("text-danger", hasDuplicates);
 }
 
 function collectValidEntries() {
@@ -1025,10 +1058,17 @@ document.addEventListener("input", (event) => {
   if (
     event.target.matches(".team-performance-input") ||
     event.target.matches(".athlete-name-input") ||
-    event.target.matches(".relay-athlete-input") ||
+    event.target.matches(".athlete-profile-input") ||
     event.target.matches("#relay-input") ||
     event.target.matches("#team-name")
   ) {
+    refreshRelaySelectorOptions();
+    updateTeamSetup();
+  }
+});
+
+document.addEventListener("change", (event) => {
+  if (event.target.matches(".relay-athlete-select")) {
     updateTeamSetup();
   }
 });
